@@ -4,6 +4,8 @@
 > documentation. All creative and technical decisions (model design, training data, evaluation) are mine, and I
 > reviewed everything before publishing.
 
+🤗 [Model on Hugging Face](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser)
+
 > A causal, real-time vocal denoiser for **tracking vocals in a DAW**: 48 kHz, **10 ms algorithmic latency**,
 > 1.25M parameters, 0.19 ms of CPU per 5 ms block. Trained from scratch on my own vocal takes, VocalSet singing
 > and DNS Challenge speech, against the noise a home studio actually has: room tone, hiss, mains hum and
