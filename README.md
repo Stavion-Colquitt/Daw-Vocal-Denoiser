@@ -79,6 +79,41 @@ from stream import process_file          # offline: whole mono 48 kHz array in, 
 y = process_file(x)
 ```
 
+## Evaluation metrics
+
+`eval.py` runs the held-out test through the streaming engine and reports two groups of metrics, noisy input vs
+enhanced output:
+
+| Metric | What it measures | Why it's here |
+|--------|------------------|---------------|
+| SI-SDR (dB) | Waveform closeness to the clean take, ignoring level | Standard enhancement metric; the main number here |
+| PESQ-WB | ITU-T P.862.2 predicted speech quality (at 16 kHz) | Kept for comparison with speech denoisers; it was designed for speech, so treat it as a rough guide on singing |
+| Clean pass-through SI-SDR | How untouched clean vocals come out | The "do no harm" check for tracking |
+| **SDR (BSS-Eval, 512-tap)** | Filter-based SDR, tolerant of small EQ/phase changes | Recommended over SI-SDR for music in recent singing-voice work |
+| **ViSQOL v3, audio mode** | Full-band (48 kHz) perceptual quality, MOS-LQO 1 to 4.73 | The usual intrusive quality metric for music; Google's code, built from source in Docker (`tools/visqol`) |
+| **MERT-MSE** | Distance between [MERT-v1-95M](https://huggingface.co/m-a-p/MERT-v1-95M) music embeddings of output and clean take | Embedding metrics track listening tests better than SDR on singing |
+| **FAD-MERT** | Fréchet distance between all outputs and all clean takes in MERT embedding space | Distribution-level check that outputs "sound like" clean vocals |
+
+Before ViSQOL and MERT, every signal is loudness-normalized to -23 LUFS (EBU R128) so level differences don't bias
+the scores. Results are also broken down (mean improvement with 95% confidence intervals) by input SNR band, noise
+type (DNS noise, headphone bleed, hiss, hum) and vocal source, and every item is written to `eval_results_items.csv`.
+
+```bash
+pip install -r requirements-eval.txt          # torch is assumed to be installed already
+docker build -t visqol:local tools/visqol      # one time; eval.py also builds it automatically if missing
+python eval.py 200                             # held-out test
+python eval.py 40 --split dev                  # check the pipeline on dev vocals without touching the test set
+python eval.py 200 --no-visqol --no-mert       # speech-style metrics + SDR only (no Docker, no model download)
+```
+
+The test mixtures come from a fixed seed, so every run scores exactly the same clips. Objective metrics are still
+only a proxy: a listening test (MUSHRA, ITU-R BS.1534) on real noisy takes is the final word.
+
+References: Le Roux et al. 2019 (SI-SDR); Vincent et al. 2006 and Scheibler 2022 (BSS-Eval, fast_bss_eval);
+Chinen et al. 2020 (ViSQOL v3); Li et al. 2023 (MERT); Kilgour et al. 2019 (FAD); Gupta et al. 2015,
+"On the Perceptual Relevance of Objective Source Separation Measures for Singing"; "Teaching Speech Enhancement
+Models To Sing" ([arXiv 2607.11630](https://arxiv.org/abs/2607.11630)) on SDR, MERT-MSE and loudness matching for singing.
+
 ## Docker
 
 A CPU-only image (ONNX Runtime, no PyTorch) is on Docker Hub as

@@ -101,18 +101,21 @@ class Mixtures(Dataset):
             clean = fftconvolve(clean, synth_rir(rng))[:SEG].astype(np.float32)
         clean *= 10 ** (rng.uniform(-32, -12) / 20) / rms(clean)      # random vocal level (RMS dBFS)
         if rng.random() < P_CLEAN_ONLY:
+            self.last_meta = {"kind": kind, "tags": ["clean"], "snr_db": None}
             return torch.from_numpy(clean.copy()), torch.from_numpy(clean.copy())
-        parts = []
-        if self.noise and rng.random() < 0.65: parts.append(read_crop(rng.choice(self.noise), SEG, rng, 1e-4))
+        parts, tags = [], []   # tags: what was mixed in (for per-noise-type eval)
+        if self.noise and rng.random() < 0.65: parts.append(read_crop(rng.choice(self.noise), SEG, rng, 1e-4)); tags.append("dns_noise")
         if self.bleed and rng.random() < 0.35:
             b = read_crop(rng.choice(self.bleed), SEG, rng, 1e-4)
             b = sosfilt(butter(2, rng.uniform(200, 900), "hp", fs=SR, output="sos"), b)       # headphones leak mids/highs
-            parts.append(b.astype(np.float32))
-        if rng.random() < 0.30: parts.append(colored_noise(SEG, rng, rng.choice(["white", "pink"])))
-        if rng.random() < 0.15: parts.append(hum(SEG, rng))
-        if not parts: parts.append(colored_noise(SEG, rng, "pink"))
+            parts.append(b.astype(np.float32)); tags.append("bleed")
+        if rng.random() < 0.30: parts.append(colored_noise(SEG, rng, rng.choice(["white", "pink"]))); tags.append("hiss")
+        if rng.random() < 0.15: parts.append(hum(SEG, rng)); tags.append("hum")
+        if not parts: parts.append(colored_noise(SEG, rng, "pink")); tags.append("hiss")
         noise = sum(p / rms(p) * 10 ** (rng.uniform(-6, 0) / 20) for p in parts).astype(np.float32)
-        noise *= rms(clean) / rms(noise) / 10 ** (rng.uniform(SNR_MIN, SNR_MAX) / 20)
+        snr = rng.uniform(SNR_MIN, SNR_MAX)
+        noise *= rms(clean) / rms(noise) / 10 ** (snr / 20)
+        self.last_meta = {"kind": kind, "tags": tags, "snr_db": snr}
         noisy = clean + noise
         pk = np.abs(noisy).max()
         if pk > 0.99: noisy, clean = noisy * (0.99 / pk), clean * (0.99 / pk)
