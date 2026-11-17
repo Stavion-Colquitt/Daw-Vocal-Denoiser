@@ -79,6 +79,24 @@ from stream import process_file          # offline: whole mono 48 kHz array in, 
 y = process_file(x)
 ```
 
+## Docker
+
+A CPU-only image (ONNX Runtime, no PyTorch) is on Docker Hub as
+[`stavion/daw-denoiser`](https://hub.docker.com/r/stavion/daw-denoiser). Any sample rate, mono or stereo; output is
+24-bit WAV at the input's rate.
+
+```bash
+# denoise a file in the current folder
+docker run --rm -v "${PWD}:/data" stavion/daw-denoiser vocal.wav vocal_clean.wav
+
+# or run it as a small HTTP service: POST audio to /denoise, get the cleaned WAV back
+docker run --rm -p 8000:8000 stavion/daw-denoiser serve
+curl -X POST --data-binary @vocal.wav http://localhost:8000/denoise -o vocal_clean.wav
+```
+
+To build it yourself, put `daw_denoiser.onnx` (from Hugging Face) next to the `Dockerfile` and run
+`docker build -t daw-denoiser .`. The container's output matches `stream.py` run directly (122 dB, limited by the
+24-bit WAV output).
 ## Training data and licenses
 
 | Source | License |
