@@ -14,8 +14,8 @@ import os, re, sys, glob, numpy as np, soundfile as sf
 from scipy.signal import resample_poly
 
 SR = 48000
-OUT = r"C:\Users\stavi\Projects\datasets\daw-denoiser"
-CORPUS = r"D:\Ableton\Music\Corpus"
+OUT = os.environ.get("DAW_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "daw-denoiser"))      # training pool written here
+CORPUS = os.environ.get("DAW_CORPUS", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "corpus"))  # your own sessions: <song>/*.wav takes
 # songs whose individual vocal takes are exported in the corpus. "Say Dat Name" is held out for TEST.
 OWN_SONGS = {"Do It": "train", "Wanna Sleep Stems": "train", "Never Beat me": "train", "If you leave": "train",
              "I don't fall in love": "train", "I Don't Like It": "train", "I don't like you": "train",

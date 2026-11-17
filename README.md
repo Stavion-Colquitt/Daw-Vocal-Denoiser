@@ -97,6 +97,21 @@ curl -X POST --data-binary @vocal.wav http://localhost:8000/denoise -o vocal_cle
 To build it yourself, put `daw_denoiser.onnx` (from Hugging Face) next to the `Dockerfile` and run
 `docker build -t daw-denoiser .`. The container's output matches `stream.py` run directly (122 dB, limited by the
 24-bit WAV output).
+## Data paths
+
+Every data location is an environment variable with a default inside the repo, so a fresh clone works without
+editing code:
+
+| Variable | Default | What goes there |
+|----------|---------|-----------------|
+| `DAW_DATA` | `data/daw-denoiser` | Training pool written by `prep_data.py` (own_vocals/, vocalset/, bleed/) |
+| `DNS_DATA` | `data/dns` | [DNS Challenge](https://github.com/microsoft/DNS-Challenge) fullband data: `clean_fullband/` and `noise_fullband/` |
+| `DAW_CORPUS` | `data/corpus` | Your own vocal takes, one folder per song (`<song>/*.wav`), read by `prep_data.py` |
+| `DAW_MUSIC` | `data/ableton-music` | Ableton project folders scanned by `prep_own_extra.py` for extra vocal takes |
+
+On Windows, set one for the current shell with `$env:DAW_DATA = "E:\my\data"` (PowerShell) or permanently with
+`setx DAW_DATA "E:\my\data"`. On Linux/macOS: `export DAW_DATA=/my/data`. `data/` is gitignored.
+
 ## Training data and licenses
 
 | Source | License |

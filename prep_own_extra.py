@@ -1,4 +1,4 @@
-"""v1c data: harvest more of the artist's own vocal takes from his Ableton sessions (D:\\Ableton\\Music).
+"""v1c data: harvest more of the artist's own vocal takes from his Ableton sessions (the folder in DAW_MUSIC).
 
 Every Live set (.als, gzipped XML) is read to find which recorded takes (Samples\\Recorded) each set uses and on
 which track. A take is used when:
@@ -8,7 +8,7 @@ which track. A take is used when:
   - it sits on a vocal track: "N-Audio" (his vocal-take tracks), LV / BGV / Lead / Front vocal; anything else
     (sound effects, bounces, instruments) and the instrument-only trumpet project are skipped
 Takes are de-duplicated, silence-squeezed the same way as prep_data.py, and written to
-C:\\Users\\stavi\\Projects\\datasets\\daw-denoiser\\own_vocals_extra\\train (originals are only read). A manifest CSV lists every source.
+<DAW_DATA>/own_vocals_extra/train (originals are only read). A manifest CSV lists every source.
     py -3.12 prep_own_extra.py --dry-run     # report only
     py -3.12 prep_own_extra.py
 """
@@ -17,8 +17,8 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from prep_data import load_mono48, squeeze_silence, save, SR
 
-MUSIC = r"D:\Ableton\Music"
-OUT = r"C:\Users\stavi\Projects\datasets\daw-denoiser\own_vocals_extra\train"
+MUSIC = os.environ.get("DAW_MUSIC", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "ableton-music"))   # your Ableton projects
+OUT = os.path.join(os.environ.get("DAW_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "daw-denoiser")), "own_vocals_extra", "train")
 HELD_OUT = re.compile(r"^(mad|say dat|sdn)", re.I)
 SKIP_PROJECTS = re.compile(r"trumpet project|\\corpus\\|\\_batch", re.I)
 VOCAL_TRACK = re.compile(r"^(\d+-Audio\b|LV ?\d*$|BGV ?\d*$|BG Vocal|Lead Vocal|Front vocal|.*\bvocals?\b|.*\bvox\b)", re.I)

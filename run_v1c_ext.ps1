@@ -4,9 +4,9 @@
 #   First start:  .\run_v1c_ext.ps1            Resume after a pause/crash:  .\run_v1c_ext.ps1 -Resume
 # Writes ext_done.txt when the extension, ONNX export and parity check are finished. eval.py is NOT run (Stavion decides).
 param([switch]$Resume, [int]$ExtendSteps = 61700)
-$run = 'C:\Users\stavi\Projects\daw-runs\v1c'; Set-Location $run
+$run = $PSScriptRoot; Set-Location $run
 $log = Join-Path $run 'run_v1c.log'
-$env:CUDA_DEVICE_ORDER = 'PCI_BUS_ID'; $env:CUDA_VISIBLE_DEVICES = '0'; $env:DAW_OWN_EXTRA = 'own_vocals_extra'; $env:DAW_DATA = 'C:\Users\stavi\Projects\datasets\daw-denoiser'   # Nov 17: NVMe copy (D: USB HDD was the bottleneck)
+$env:CUDA_DEVICE_ORDER = 'PCI_BUS_ID'; $env:CUDA_VISIBLE_DEVICES = '0'; $env:DAW_OWN_EXTRA = 'own_vocals_extra'   # data location: DAW_DATA (see README)
 Remove-Item pause.flag -ErrorAction SilentlyContinue
 if (-not $Resume) {
     "extension started $(Get-Date) (+$ExtendSteps steps, RTX 2060)" | Out-File $log -Append
