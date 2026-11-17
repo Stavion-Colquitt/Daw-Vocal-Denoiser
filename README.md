@@ -64,7 +64,7 @@ not been run yet; those numbers will be added here.
 | `eval.py` | Held-out test evaluation (SI-SDR, PESQ, pass-through) |
 
 The weights (`daw_denoiser.onnx`, `daw_denoiser.pth`) are on
-[Hugging Face](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c) and attached to this repo's release.
+[Hugging Face](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c).
 My own vocal recordings are not included.
 
 ## Usage
