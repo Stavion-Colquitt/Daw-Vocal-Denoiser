@@ -110,6 +110,20 @@ On Windows, `start_training.bat` runs the whole thing in the background (train -
 
 ---
 
+## Data paths
+
+Every data location is an environment variable with a default inside the repo, so a fresh clone works without
+editing code:
+
+| Variable | Default | What goes there |
+|----------|---------|-----------------|
+| `DAW_DATA` | `data/daw-denoiser` | Training pool written by `prep_data.py` (own_vocals/, vocalset/, bleed/) |
+| `DNS_DATA` | `data/dns` | [DNS Challenge](https://github.com/microsoft/DNS-Challenge) fullband data: `clean_fullband/` and `noise_fullband/` |
+| `DAW_CORPUS` | `data/corpus` | Your own vocal takes, one folder per song (`<song>/*.wav`), read by `prep_data.py` |
+
+On Windows, set one for the current shell with `$env:DAW_DATA = "E:\my\data"` (PowerShell) or permanently with
+`setx DAW_DATA "E:\my\data"`. On Linux/macOS: `export DAW_DATA=/my/data`. `data/` is gitignored.
+
 ## Files
 
 | File | What it is |

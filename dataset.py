@@ -13,8 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 
 SR = 48000
 SEG = 4 * SR          # long segments let the GRU learn context (Xia et al. 2020: >= 5 s best; 4 s fits GPU memory)
-DATA = os.environ.get("DAW_DATA", r"D:\Datasets\daw-denoiser")
-DNS = os.environ.get("DNS_DATA", r"C:\Users\stavi\Projects\audio-ml-pipeline\data")
+DATA = os.environ.get("DAW_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "daw-denoiser"))   # built by prep_data.py
+DNS = os.environ.get("DNS_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dns"))   # clean_fullband/ + noise_fullband/
 SNR_MIN, SNR_MAX, P_CLEAN_ONLY, P_ROOM = 0.0, 40.0, 0.10, 0.30
 CLEAN_W = {"own": 0.35, "vocalset": 0.35, "speech": 0.30}
 
@@ -26,7 +26,10 @@ def pools(split):
     sp = "train" if split == "train" else "dev"
     speech = [f for f in g(os.path.join(DNS, "clean_fullband", "**", "*.wav")) if _is_dev(f) == (split != "train")]
     noise = [f for f in g(os.path.join(DNS, "noise_fullband", "**", "*.wav")) if _is_dev(f) == (split != "train")]
-    clean = {"own": g(os.path.join(DATA, "own_vocals", sp, "*.wav")),
+    own = g(os.path.join(DATA, "own_vocals", sp, "*.wav"))
+    if split == "train" and os.environ.get("DAW_OWN_EXTRA"):          # v1c: more of my own takes (train only)
+        own += g(os.path.join(DATA, os.environ["DAW_OWN_EXTRA"], "train", "*.wav"))
+    clean = {"own": own,
              "vocalset": g(os.path.join(DATA, "vocalset", sp, "*.wav")), "speech": speech}
     return clean, noise, g(os.path.join(DATA, "bleed", "*.wav"))
 
