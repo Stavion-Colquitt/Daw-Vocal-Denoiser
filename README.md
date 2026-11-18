@@ -87,6 +87,8 @@ one with the lowest dev loss (step 108,779). The held-out test results are above
 | `export_onnx.py` | Exports the one-frame streaming ONNX model |
 | `check_parity.py` | Checks ONNX vs PyTorch and measures CPU time per block |
 | `eval.py` | Held-out test evaluation (SI-SDR, PESQ, pass-through) |
+| `compare.py` | Runs several versions on identical clips; paired differences and a by-voice split |
+| `results/` | Raw held-out test comparison (`compare_test.md`, `compare_test.json` with per-clip scores) |
 
 The weights (`daw_denoiser.onnx`, `daw_denoiser.pth`) are on
 [Hugging Face](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c).
