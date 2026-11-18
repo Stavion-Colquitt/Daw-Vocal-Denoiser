@@ -13,6 +13,32 @@ my own singing**. The question v1c asks: does more in-domain vocal data (my voic
 
 ---
 
+## Results (held-out test)
+
+180 noisy clips (+ 20 clean pass-through clips) that no version trained on: my held-out song *Say Dat Name* (86 clips)
+and held-out VocalSet singers (94 clips), mixed with dev-split noise at 0-40 dB SNR from a fixed seed. Every version
+runs on exactly the same clips through the streaming engine (`compare.py`), so differences are paired.
+
+| Version | SI-SDR (dB) | SDR (dB) | PESQ-WB | ViSQOL | FAD-MERT (lower better) | Clean pass-through SI-SDR (dB) |
+|---|---|---|---|---|---|---|
+| Noisy input | 19.04 | 19.02 | 2.37 | 3.53 | 1.732 | |
+| v1 | 22.95 | 23.70 | **3.05** | 3.97 | **0.419** | 45.6 |
+| v1c after main run (47k steps) | 23.05 | 23.65 | 2.97 | 3.96 | 0.513 | 50.3 |
+| **v1c final (108,779 steps)** | **23.27** | **23.85** | 3.03 | **3.98** | 0.485 | **51.1** |
+
+**By voice**, v1c final vs v1 (paired, mean ± 95% CI):
+
+| Voice | SI-SDR (dB) | SDR (dB) | PESQ-WB | ViSQOL |
+|---|---|---|---|---|
+| My voice (86 clips) | **+0.95 ± 0.67** | **+0.62 ± 0.57** | +0.02 ± 0.02 | **+0.03 ± 0.02** |
+| Other singers, VocalSet (94 clips) | -0.27 ± 0.27 | -0.29 ± 0.24 | -0.05 ± 0.02 | -0.02 ± 0.04 |
+
+**What this shows:** four times more of my own singing made the model specialize to my voice, mics and rooms. It
+is clearly better on my vocals and slightly worse on other singers, and it leaves clean takes more untouched
+(51.1 vs 45.6 dB pass-through). The extra training length mattered: after its main run alone, v1c was not yet better
+than v1. For other voices, [v1](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser) is still the better
+general-purpose choice. Metric details: see *Evaluation metrics* below.
+
 ## Results (dev set)
 
 | | v1 | v1c |
@@ -23,8 +49,7 @@ my own singing**. The question v1c asks: does more in-domain vocal data (my voic
 | Peak dev SI-SDR gain during training | +2.39 dB | +2.59 dB (step 95,000) |
 
 At the same number of training steps, v1c is **+0.18 dB** above v1 on the dev set. The published checkpoint is the
-one with the lowest dev loss (step 108,779). The held-out test set (`Say Dat Name` plus held-out VocalSet singers) has
-not been run yet; those numbers will be added here.
+one with the lowest dev loss (step 108,779). The held-out test results are above.
 
 | Real-time property | Value |
 |--------------------|-------|

@@ -53,8 +53,9 @@ def lufs_norm(x, target=-23.0):
 
 
 # ---------------- ViSQOL (Docker) ----------------
-def visqol_batch(pairs, image="visqol:local"):
-    """pairs: list of (ref, deg) float32 arrays at 48 kHz. Returns MOS-LQO list (1-5), audio mode."""
+def visqol_batch(pairs, image="visqol:local", workers=4):
+    """pairs: list of (ref, deg) float32 arrays at 48 kHz. Returns MOS-LQO list (1-5), audio mode.
+    The pairs are split across `workers` containers running in parallel (ViSQOL itself is single-threaded)."""
     here = os.path.dirname(os.path.abspath(__file__))
     if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode != 0:
         print(f"building {image} from tools/visqol (one time, several minutes)...", flush=True)
@@ -65,11 +66,18 @@ def visqol_batch(pairs, image="visqol:local"):
             sf.write(os.path.join(td, f"r{i}.wav"), r, SR, subtype="PCM_16")
             sf.write(os.path.join(td, f"d{i}.wav"), d, SR, subtype="PCM_16")
             rows.append((f"/work/r{i}.wav", f"/work/d{i}.wav"))
-        with open(os.path.join(td, "pairs.csv"), "w", newline="") as f:
-            w = csv.writer(f); w.writerow(["reference", "degraded"]); w.writerows(rows)
-        subprocess.run(["docker", "run", "--rm", "-v", f"{td}:/work", image, "--batch_input_csv", "/work/pairs.csv",
-                        "--results_csv", "/work/out.csv"], check=True, capture_output=True)
-        res = {row["degraded"]: float(row["moslqo"]) for row in csv.DictReader(open(os.path.join(td, "out.csv")))}
+        k = max(1, min(workers, len(rows))); procs = []
+        for j in range(k):
+            with open(os.path.join(td, f"pairs{j}.csv"), "w", newline="") as f:
+                w = csv.writer(f); w.writerow(["reference", "degraded"]); w.writerows(rows[j::k])
+            procs.append(subprocess.Popen(["docker", "run", "--rm", "-v", f"{td}:/work", image, "--batch_input_csv",
+                                           f"/work/pairs{j}.csv", "--results_csv", f"/work/out{j}.csv"],
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        for p in procs:
+            if p.wait() != 0: raise RuntimeError(f"visqol container exited with {p.returncode}")
+        res = {}
+        for j in range(k):
+            res.update({row["degraded"]: float(row["moslqo"]) for row in csv.DictReader(open(os.path.join(td, f"out{j}.csv")))})
     return [res.get(d, np.nan) for _, d in rows]
 
 
