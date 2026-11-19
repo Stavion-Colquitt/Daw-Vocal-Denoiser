@@ -1,0 +1,8 @@
+# Extra packages for eval.py (speech-style + music metrics). torch/numpy/scipy/soundfile come from the training setup.
+pesq>=0.0.4
+pystoi>=0.4
+fast_bss_eval==0.1.4
+pyloudnorm==0.2.0
+# transformers 4.46.x works with torch 2.5; MERT also needs nnAudio
+transformers==4.46.3
+nnAudio==0.3.4
