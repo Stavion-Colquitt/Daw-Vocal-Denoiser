@@ -18,8 +18,9 @@ import copy
 from model import StreamDenoiser, enhance, count_parameters, COMP
 from dataset import loaders, SR
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.environ.get("DAW_RUN_DIR", os.path.dirname(os.path.abspath(__file__)))   # checkpoints, MLflow db, pause.flag (versions/<v>/run.ps1 sets DAW_RUN_DIR)
 CK = os.path.join(HERE, "checkpoints"); os.makedirs(CK, exist_ok=True)
+PAUSE = os.path.join(HERE, "pause.flag")
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 ap = argparse.ArgumentParser()
@@ -30,6 +31,7 @@ ap.add_argument("--lr", type=float, default=1e-3)
 ap.add_argument("--eval_every", type=int, default=1000)
 ap.add_argument("--workers", type=int, default=6)
 ap.add_argument("--resume", action="store_true")
+ap.add_argument("--extend_steps", type=int, default=0); ap.add_argument("--peak2", type=float, default=3e-4)
 ap.add_argument("--smoke", action="store_true")
 args = ap.parse_args()
 
@@ -100,7 +102,14 @@ def main():
         ck = torch.load(os.path.join(CK, "latest.pth"), map_location=DEV, weights_only=False)
         model.load_state_dict(ck["model"]); ema.load_state_dict(ck["ema"]); opt.load_state_dict(ck["opt"])
         step, best, total, run_id = ck["step"], ck["best"], ck["total"], ck.get("run_id")
+        ext_start = ck.get("ext_start")
         print(f"resumed at step {step}/{total}", flush=True)
+    else: ext_start = None
+    # (Nov 16) Continued training: --extend_steps N adds N steps after the finished run, re-warming 300 steps to --peak2
+    # and annealing (cosine) to 1e-5 again. Only starts a NEW extension when the checkpoint isn't already in one.
+    if args.extend_steps and ext_start is None:
+        ext_start, total = step, step + args.extend_steps
+        print(f"extending from step {step} to {total} (peak lr {args.peak2:.0e})", flush=True)
     it = iter(tr); t0 = time.time(); start = step
     with mlflow.start_run(run_id=run_id, run_name="smoke" if args.smoke else None) as run:
         if run_id is None:
@@ -109,7 +118,11 @@ def main():
                                "loss": "comp0.3+0.5mrstft"})
         while total is None or step < total:
             noisy, clean = next(it); noisy, clean = noisy.to(DEV, non_blocking=True), clean.to(DEV, non_blocking=True)
-            if step < WARMUP: lr = args.lr * (step + 1) / WARMUP
+            if ext_start is not None:
+                e = step - ext_start
+                lr = 1e-5 + (args.peak2 - 1e-5) * (e + 1) / 300 if e < 300 else \
+                     1e-5 + 0.5 * (args.peak2 - 1e-5) * (1 + math.cos(math.pi * min((e - 300) / max(total - ext_start - 300, 1), 1.0)))
+            elif step < WARMUP: lr = args.lr * (step + 1) / WARMUP
             elif total is not None: lr = 1e-5 + 0.5 * (args.lr - 1e-5) * (1 + math.cos(math.pi * min((step - WARMUP) / max(total - WARMUP, 1), 1.0)))
             else: lr = args.lr
             for g in opt.param_groups: g["lr"] = lr
@@ -132,7 +145,12 @@ def main():
                     best = dl; torch.save({"model": ema.state_dict(), "step": step, "dev_loss": dl, "dev_gain": dg}, os.path.join(CK, "best.pth"))
                     print("  saved best", flush=True)
                 torch.save({"model": model.state_dict(), "ema": ema.state_dict(), "opt": opt.state_dict(), "step": step,
-                            "best": best, "total": total, "run_id": run.info.run_id}, os.path.join(CK, "latest.pth"))
+                            "best": best, "total": total, "run_id": run.info.run_id, "ext_start": ext_start}, os.path.join(CK, "latest.pth"))
+            # (Nov 16) Graceful pause for the GPU router: finish this step, save the full state, exit. --resume continues here.
+            if os.path.exists(PAUSE):
+                torch.save({"model": model.state_dict(), "ema": ema.state_dict(), "opt": opt.state_dict(), "step": step,
+                            "best": best, "total": total, "run_id": run.info.run_id, "ext_start": ext_start}, os.path.join(CK, "latest.pth"))
+                print(f"paused at step {step}/{total} (pause.flag)", flush=True); return
         mlflow.log_metric("best_dev_loss", best)
     print("done. next: py -3.12 export_onnx.py", flush=True)
 

@@ -13,8 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 
 SR = 48000
 SEG = 4 * SR          # long segments let the GRU learn context (Xia et al. 2020: >= 5 s best; 4 s fits GPU memory)
-DATA = os.environ.get("DAW_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "daw-denoiser"))   # built by prep_data.py
-DNS = os.environ.get("DNS_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "dns"))   # clean_fullband/ + noise_fullband/
+DATA = os.environ.get("DAW_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "daw-denoiser"))   # built by prep_data.py
+DNS = os.environ.get("DNS_DATA", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "dns"))   # clean_fullband/ + noise_fullband/
 SNR_MIN, SNR_MAX, P_CLEAN_ONLY, P_ROOM = 0.0, 40.0, 0.10, 0.30
 CLEAN_W = {"own": 0.35, "vocalset": 0.35, "speech": 0.30}
 

@@ -4,113 +4,112 @@
 > documentation. All creative and technical decisions (model design, training data, evaluation) are mine, and I
 > reviewed everything before publishing.
 
-🤗 [Model on Hugging Face](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser)
+🎧 [Live A/B demo](https://huggingface.co/spaces/Stavion-Colquitt/Realtime_Denoisers) · 🤗 Models: [v1](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser), [v1c](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c), [v1b](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1b), [v1d](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1d) · 🐳 [`stavion/daw-denoiser`](https://hub.docker.com/r/stavion/daw-denoiser/tags) · 📋 [Project board](https://github.com/users/Stavion-Colquitt/projects/2)
 
-**Later versions:** [v1c](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1c) (4x more of my own singing) · [v1b](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1b) (bigger GRU) · [v1d](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1d) (5 ms lookahead) · 🎧 [Live A/B demo](https://huggingface.co/spaces/Stavion-Colquitt/Realtime_Denoisers) · 📋 [Project board](https://github.com/users/Stavion-Colquitt/projects/2)
+A causal, real-time vocal denoiser for **tracking vocals in a DAW**: 48 kHz, **10 ms algorithmic latency** (15 ms with
+lookahead), about 1.25M parameters, a fraction of a millisecond of CPU per 5 ms block. Trained from scratch on my own
+vocal takes, VocalSet singing and DNS Challenge speech, against the noise a home studio actually has: room tone, hiss,
+mains hum and headphone bleed.
 
-> A causal, real-time vocal denoiser for **tracking vocals in a DAW**: 48 kHz, **10 ms algorithmic latency**,
-> 1.25M parameters, 0.19 ms of CPU per 5 ms block. Trained from scratch on my own vocal takes, VocalSet singing
-> and DNS Challenge speech, against the noise a home studio actually has: room tone, hiss, mains hum and
-> headphone bleed.
+Every version changes **one thing** from the one before it and is scored on the **same held-out clips**, so this repo
+doubles as an ablation study: more data, a bigger model, and lookahead, measured against each other.
 
-Companion to [Audio_ML_Noise_Reduction](https://github.com/Stavion-Colquitt/Audio_ML_Noise_Reduction) (the
-call/meeting denoiser). Same lab, different job: a call can afford 100+ ms; a singer hearing themselves through
-headphones cannot.
+| Version | Question it asks | Latency | Params | CPU per 5 ms block | Folder |
+|---|---|---|---|---|---|
+| v1 | Baseline: does a small causal GRU meet the real-time rules? | 10 ms | 1.25M | 0.19 ms | [`versions/v1`](versions/v1) |
+| v1c | Does more of my own singing help? | 10 ms | 1.25M | 0.24 ms | [`versions/v1c`](versions/v1c) |
+| v1b | Bigger model (GRU 384) vs. more data? | 10 ms | 2.51M | 0.47 ms | [`versions/v1b`](versions/v1b) |
+| v1d | What does 5 ms of lookahead buy? | 15 ms | 1.25M | 0.23 ms | [`versions/v1d`](versions/v1d) |
 
----
-
-## Results
-
-Held-out singing the model never saw in training: a song of mine held out for test (`Say Dat Name`) plus held-out
-VocalSet singers (female9, male11), mixed with dev-split noise (DNS noise, bleed, hiss, hum) at 0-40 dB SNR from a
-fixed seed. 200 items, run through the **streaming engine** (exactly what a DAW would run); about 10% are clean-only
-and give the pass-through number.
-
-| Metric | Noisy input | Enhanced | Change |
-|--------|-------------|----------|--------|
-| SI-SDR (dB) | 19.04 | **22.95** | **+3.91** |
-| PESQ (WB, at 16 kHz) | 2.37 | **3.05** | **+0.68** |
-| Clean pass-through SI-SDR (dB) | | **45.6** | clean takes are left essentially untouched |
-
-| Real-time property | Value |
-|--------------------|-------|
-| Algorithmic latency | **10 ms** (5 ms hop, 10 ms synthesis window) |
-| CPU per 5 ms block (ONNX Runtime, desktop CPU) | **0.19 ms** (real-time factor 0.038) |
-| Streaming vs offline parity | 111.9 dB (the block-by-block engine reproduces the training path) |
-| Parameters | 1,250,563 |
-
-The test mixes start at a fairly high SNR on purpose: tracking noise is usually quiet, and the hard requirement in a
-DAW is "do no harm" to a clean take, which the 45.6 dB pass-through number checks.
+**Which one to use:** **v1d** for the best quality per CPU if 15 ms is fine for monitoring; **v1b** for the best
+accuracy at 10 ms; **v1c** for my own voice with the cleanest pass-through; **v1** for other people's voices on a tight
+CPU budget.
 
 ---
 
-## How it works
+## Results (held-out test)
 
-```
-48 kHz mic, 240-sample (5 ms) blocks
-   |
-   v  Asymmetric windows (Wang et al. 2021, arXiv:2106.11794)
-   |    analysis: 32 ms (1536 samples -> 769 bins, 31 Hz resolution: resolves low sung harmonics)
-   |    synthesis: 10 ms (480 samples) -> latency is set by the SHORT window
-   |    analysis x synthesis = Hann(480): perfect reconstruction when the mask is 1 (error 9.5e-7)
-   v
-|S|^0.3 -> Linear -> LayerNorm -> PReLU -> 2-layer GRU (256) -> Linear -> PReLU -> Linear -> sigmoid mask
-   |       (the GRU carries context across frames, so 5 ms frames still "know" the last few seconds)
-   v
-mask x S (noisy phase kept) -> iFFT -> overlap-add -> 5 ms out
-```
+180 noisy clips (+ 20 clean pass-through clips) that no version trained on: my held-out song *Say Dat Name* (86 clips)
+and held-out VocalSet singers (94 clips), mixed with dev-split noise at 0-40 dB SNR from a fixed seed. Every version runs
+through the streaming engine on exactly the same clips, so differences are paired. Bold = best.
 
-Keeping the noisy phase is deliberate: the call denoiser's v3 experiment showed a learned phase made quality worse.
+| Version | SI-SDR (dB) | SDR (dB) | PESQ-WB | ViSQOL | FAD-MERT (lower better) | Clean pass-through SI-SDR (dB) |
+|---|---|---|---|---|---|---|
+| Noisy input | 19.04 | 19.02 | 2.37 | 3.53 | 1.732 |  |
+| v1 | 22.95 | 23.70 | 3.05 | 3.97 | **0.419** | 45.6 |
+| v1c | 23.27 | 23.85 | 3.03 | 3.98 | 0.485 | **51.1** |
+| v1b | **23.46** | **24.07** | 3.10 | **3.99** | 0.448 | 47.6 |
+| v1d | 23.43 | 24.03 | **3.11** | **3.99** | 0.446 | 50.5 |
 
-## Training recipe
+**Each one-variable step, paired** (mean ± 95% CI over clips; bold = the interval excludes zero):
 
-| | |
-|---|---|
-| Clean audio | own vocal takes 35% (individual takes exported from my sessions) / VocalSet 35% / DNS Challenge speech 30% |
-| Noise | DNS noise, simulated headphone bleed (my own instrumentals, high-passed), white/pink hiss, 50/60 Hz hum |
-| Augmentation | random EQ tilt (different mics/preamps), synthetic room on 30% (same room on input and target: it removes noise, not the room), SNR 0-40 dB, 10% clean-only |
-| Segments | 4 s at 48 kHz (long enough for the GRU to learn context) |
-| Loss | compressed spectral loss (Braun & Tashev, power 0.3: 0.7 magnitude + 0.3 complex) + 0.5 x multi-resolution STFT |
-| Level | the model sees the real input level (as in a DAW); only the loss is level-normalised |
-| Optimiser | AdamW 1e-3, 1k-step warmup, cosine decay, grad clip 3.0, EMA 0.999 (EMA weights are evaluated and exported) |
-| Run | 108,773 steps (batch 32), self-sized to a 9-hour budget; best dev checkpoint at step 77,000 |
-| Hardware | RTX 4060 (8 GB); resumed across a GPU driver reset and moved between GPUs via checkpoints |
-| Tracking | MLflow (`view_mlflow.bat`) |
+| Step | SI-SDR, all clips | SI-SDR, my voice | SI-SDR, other singers | PESQ-WB, all clips |
+|---|---|---|---|---|
+| v1 → v1c (more own data) | +0.32 ± 0.36 | **+0.95 ± 0.67** | -0.27 ± 0.27 | **-0.02 ± 0.02** |
+| v1c → v1b (GRU 256 → 384) | +0.19 ± 0.25 | -0.03 ± 0.45 | **+0.38 ± 0.24** | **+0.07 ± 0.02** |
+| v1c → v1d (+5 ms lookahead) | +0.17 ± 0.19 | +0.09 ± 0.24 | +0.23 ± 0.30 | **+0.07 ± 0.02** |
 
-Data split is by song and by singer, fixed up front; the test song and test singers are never used for training or
-model selection.
+**What this shows:** more of my own singing (v1c) specialized the model to my voice. A bigger model (v1b) is the most
+accurate and wins back other singers. 5 ms of lookahead (v1d) buys about as much as doubling the model, at half the
+CPU. The confidence intervals cover variation across test clips, not between training runs; a seed-variance re-run of
+v1c is on the [project board](https://github.com/users/Stavion-Colquitt/projects/2). Raw per-clip scores: [`results/`](results).
 
 ---
 
-## Use it
-
-**Get the model:** download `daw_denoiser.onnx` from the [Releases](../../releases) page and put it in this folder.
+## Quick start
 
 ```python
-from stream import StreamEngine
-eng = StreamEngine()                  # loads daw_denoiser.onnx
-y_block = eng.process(x_block)        # x_block: float32[240] at 48 kHz -> 240 denoised samples, 10 ms later
+# pip install onnxruntime numpy      (download daw_denoiser.onnx for the version you want from Hugging Face)
+import os
+os.environ["DAW_ONNX"] = "path/to/daw_denoiser.onnx"
+os.environ["DAW_LOOKAHEAD"] = "1"     # v1d only (0 for the others)
+os.environ["DAW_HIDDEN"] = "256"      # 384 for v1b
+from denoiser.stream import StreamEngine, process_file    # or run from inside denoiser/
+
+eng = StreamEngine()
+y_block = eng.process(x_block)        # float32[240] at 48 kHz in -> 240 denoised samples out
+y = process_file(x)                   # offline: whole mono 48 kHz array, time-aligned output
 ```
 
-`stream.py` also has `process_file()` for offline use. A JUCE VST3/AU plugin wrapping the same ONNX model is the
-next step.
+| Version | `DAW_HIDDEN` | `DAW_LOOKAHEAD` | Weights |
+|---|---|---|---|
+| v1 | 256 | 0 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser) |
+| v1c | 256 | 0 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c) |
+| v1b | 384 | 0 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1b](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1b) |
+| v1d | 256 | 1 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1d](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1d) |
 
-## Train it
+## Docker
+
+CPU-only images (ONNX Runtime, no PyTorch) on Docker Hub: `stavion/daw-denoiser:v1b`, `:v1d`, and `:latest` (v1c).
+Any sample rate, mono or stereo; output is 24-bit WAV at the input's rate.
 
 ```bash
-pip install torch numpy scipy soundfile onnx onnxruntime mlflow pesq pystoi
-python prep_data.py all          # builds the 48 kHz pools (point it at your own takes; see the paths at the top)
-python train.py --hours 9        # sizes the run to the time budget; checkpoints every 1000 steps
-python train.py --resume         # continue after a crash or reboot
-python export_onnx.py            # one-frame streaming ONNX (state in, state out)
-python check_parity.py           # streaming engine vs training path + speed
-python eval.py 200               # held-out singing: SI-SDR / PESQ / clean pass-through
+docker run --rm -v "${PWD}:/data" stavion/daw-denoiser:v1d vocal.wav vocal_clean.wav
+docker run --rm -p 8000:8000 stavion/daw-denoiser:v1d serve
+curl -X POST --data-binary @vocal.wav http://localhost:8000/denoise -o vocal_clean.wav
 ```
 
-On Windows, `start_training.bat` runs the whole thing in the background (train -> export -> parity -> eval);
-`resume_training.bat` continues an interrupted run.
+To build any version yourself, see [`docker/Dockerfile`](docker/Dockerfile). Container output matches `stream.py` run
+directly (122.5 dB, limited by the 24-bit WAV output).
 
----
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| `denoiser/model.py` | Model and asymmetric-window STFT (`DAW_HIDDEN`, `DAW_LOOKAHEAD`) |
+| `denoiser/stream.py` | Real-time block engine and `process_file`; numpy + onnxruntime only |
+| `denoiser/dataset.py`, `prep_data.py`, `prep_own_extra.py` | Training data: on-the-fly mixing, building the pools |
+| `denoiser/train.py` | Training loop (compressed spectral + multi-resolution STFT loss, AdamW, EMA 0.999, MLflow) |
+| `denoiser/export_onnx.py`, `check_parity.py` | One-frame ONNX export; streaming vs. PyTorch parity and CPU time |
+| `denoiser/eval.py`, `compare.py`, `compare_multi.py` | Held-out evaluation; several versions on identical clips |
+| `denoiser/test_lookahead.py` | Confirms lookahead reaches exactly as far ahead as set, and no further |
+| `denoiser/denoise.py`, `docker/` | Container CLI and HTTP service |
+| `versions/<v>/` | Notes, results and the training script (`run.ps1`) for each version |
+| `results/` | Held-out comparison of all four versions, per-clip scores |
+| `tools/visqol/` | ViSQOL v3 built from source in Docker (used by `eval.py`) |
+
+Retrain a version: `versions/<v>/run.ps1`. It sets that version's settings and keeps its checkpoints, MLflow db and
+ONNX export inside its own folder (`DAW_RUN_DIR`).
 
 ## Evaluation metrics
 
@@ -154,37 +153,32 @@ editing code:
 
 | Variable | Default | What goes there |
 |----------|---------|-----------------|
-| `DAW_DATA` | `data/daw-denoiser` | Training pool written by `prep_data.py` (own_vocals/, vocalset/, bleed/) |
+| `DAW_DATA` | `data/daw-denoiser` (at the repo root) | Training pool written by `prep_data.py` (own_vocals/, vocalset/, bleed/) |
 | `DNS_DATA` | `data/dns` | [DNS Challenge](https://github.com/microsoft/DNS-Challenge) fullband data: `clean_fullband/` and `noise_fullband/` |
 | `DAW_CORPUS` | `data/corpus` | Your own vocal takes, one folder per song (`<song>/*.wav`), read by `prep_data.py` |
+| `DAW_MUSIC` | `data/ableton-music` | Ableton project folders scanned by `prep_own_extra.py` for extra vocal takes |
 
 On Windows, set one for the current shell with `$env:DAW_DATA = "E:\my\data"` (PowerShell) or permanently with
 `setx DAW_DATA "E:\my\data"`. On Linux/macOS: `export DAW_DATA=/my/data`. `data/` is gitignored.
 
-## Files
+## Training data and licenses
 
-| File | What it is |
-|------|------------|
-| `model.py` | Asymmetric-window STFT, the GRU mask model, `enhance()` |
-| `dataset.py` | On-the-fly mixtures (noise, bleed, hiss, hum, rooms, EQ) |
-| `prep_data.py` | Builds the training pools from session takes, VocalSet and bleed sources |
-| `train.py` | Training loop: loss, EMA, warmup + cosine, time-budget sizing, resume, MLflow |
-| `stream.py` | Real-time block engine (ONNX Runtime) |
-| `export_onnx.py` | Exports the one-frame streaming model |
-| `check_parity.py` | Streaming vs offline parity and CPU cost per block |
-| `eval.py` | Held-out evaluation |
-| `*.bat`, `*.ps1` | Windows launchers (start, resume, resume pinned to a specific GPU, MLflow UI) |
+| Source | License |
+|--------|---------|
+| My own vocal takes and instrumentals | Mine (not distributed) |
+| [VocalSet](https://zenodo.org/records/1442513) (Wilkins et al., ISMIR 2018) | CC BY 4.0 |
+| [DNS Challenge](https://github.com/microsoft/DNS-Challenge) fullband speech and noise (subsets) | Per source, see the DNS repo |
 
-## Data and credits
+No commercial sample packs. Code is MIT licensed (see `LICENSE`).
 
-- **VocalSet** (Wilkins et al., ISMIR 2018), CC BY 4.0.
-- **DNS Challenge** clean speech and noise (Microsoft), see the DNS Challenge repository for per-source licenses.
-- **My own vocal takes and instrumentals** (used with my permission, obviously). No commercial sample packs are in
-  the training data.
-- Asymmetric windows: Wang, Z.-Q. et al., *"STFT-Domain Neural Speech Enhancement with Very Low Algorithmic
-  Latency"*, arXiv:2106.11794. Compressed loss: Braun & Tashev, *"A consolidated view of loss functions for
-  supervised deep learning-based speech enhancement"*, 2021.
+## Limits
 
-## License
+- For monitoring and cleaning vocal takes (singing or speech) recorded in untreated rooms.
+- Removes noise, not reverb. Mono, 48 kHz only (resample other rates first).
+- Not tested on heavy distortion or SNR below 0 dB; very loud headphone bleed can survive.
+- v1d adds 5 ms of latency (15 ms total); still low enough to monitor through.
 
-MIT (code). Model weights: same terms, with the dataset attributions above.
+## History
+
+v1c, v1b and v1d started as separate repositories. They now live here, with their full commit history; the old
+repositories are archived and point to this one.

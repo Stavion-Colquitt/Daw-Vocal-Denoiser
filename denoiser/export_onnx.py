@@ -5,7 +5,7 @@ The host (Python stream, or a JUCE/VST plugin later) keeps the GRU state between
 import os, sys, torch, onnx, onnxruntime as ort, numpy as np
 from model import StreamDenoiser, BINS
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.environ.get("DAW_RUN_DIR", os.path.dirname(os.path.abspath(__file__)))   # reads <run dir>/checkpoints/best.pth, writes <run dir>/daw_denoiser.onnx
 CKPT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "checkpoints", "best.pth")
 OUT = os.path.join(HERE, "daw_denoiser.onnx")
 
@@ -19,7 +19,7 @@ def main():
     m = StreamDenoiser(); ck = torch.load(CKPT, map_location="cpu", weights_only=False)   # best.pth holds EMA weights
     m.load_state_dict(ck["model"]); m.eval(); print(f"checkpoint step {ck.get('step')}, dev SI-SDR gain {ck.get('dev_gain', 0):+.2f} dB")
     mag, h = torch.rand(1, 1, BINS), torch.zeros(m.layers, 1, m.hidden)
-    torch.onnx.export(Step(m), (mag, h), OUT, input_names=["mag", "h"], output_names=["mask", "h_out"], opset_version=17,
+    torch.onnx.export(Step(m), (mag, h), OUT, input_names=["mag", "h"], output_names=["mask", "h_out"], opset_version=17, dynamo=False,
                       do_constant_folding=True)
     onnx.checker.check_model(onnx.load(OUT))
     s = ort.InferenceSession(OUT, providers=["CPUExecutionProvider"])

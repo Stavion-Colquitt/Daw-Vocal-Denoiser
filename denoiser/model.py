@@ -1,4 +1,4 @@
-"""Causal streaming vocal denoiser, 48 kHz, 10 ms algorithmic latency.
+﻿"""Causal streaming vocal denoiser, 48 kHz, 10 ms algorithmic latency (+5 ms per lookahead frame, DAW_LOOKAHEAD).
 
 Asymmetric analysis/synthesis windows (Wang et al. 2021, arXiv:2106.11794): a LONG 32 ms analysis window
 (1536 samples -> 769 bins, 31 Hz resolution, enough to resolve the harmonics of low sung notes) with a SHORT 10 ms
@@ -9,6 +9,7 @@ overlap-add reconstructs perfectly when the mask is 1.
 Per frame: |S|^0.3 -> Linear -> LayerNorm -> 2-layer GRU (causal context) -> Linear -> sigmoid magnitude mask.
 The mask keeps the input phase (the call-denoiser v3 experiment showed predicted phase hurt quality).
 """
+import os
 import numpy as np, torch, torch.nn as nn
 
 SR, K, M = 48000, 1536, 240          # analysis length, hop (synthesis window = 2M = 480 = 10 ms)
@@ -52,7 +53,7 @@ def synthesis(Y, n):
 
 
 class StreamDenoiser(nn.Module):
-    def __init__(self, hidden=256, layers=2):
+    def __init__(self, hidden=int(os.environ.get("DAW_HIDDEN", 256)), layers=2):   # v1b: DAW_HIDDEN=384
         super().__init__()
         self.hidden, self.layers = hidden, layers
         self.inp = nn.Sequential(nn.Linear(BINS, hidden), nn.LayerNorm(hidden), nn.PReLU())
@@ -65,8 +66,16 @@ class StreamDenoiser(nn.Module):
         return self.out(z), h
 
 
+LOOKAHEAD = int(os.environ.get("DAW_LOOKAHEAD", 0))   # frames of lookahead (1 frame = 1 hop = 5 ms); v1d: 1 -> 15 ms total latency
+
+
 def enhance(model, noisy):      # [B, N] -> [B, N]   (input at its real level: no normalisation, like the plugin)
-    S = analysis(noisy); m, _ = model(S.abs()); return synthesis(m * S, noisy.shape[-1])
+    S = analysis(noisy); mag = S.abs()
+    if LOOKAHEAD:                # frame t gets the mask the GRU produced after seeing frame t+LOOKAHEAD
+        mag = torch.nn.functional.pad(mag, (0, 0, 0, LOOKAHEAD))
+    m, _ = model(mag)
+    if LOOKAHEAD: m = m[:, LOOKAHEAD:]
+    return synthesis(m * S, noisy.shape[-1])
 
 
 def count_parameters(m): return sum(p.numel() for p in m.parameters() if p.requires_grad)

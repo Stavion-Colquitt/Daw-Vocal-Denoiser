@@ -59,7 +59,7 @@ def visqol_batch(pairs, image="visqol:local", workers=4):
     here = os.path.dirname(os.path.abspath(__file__))
     if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode != 0:
         print(f"building {image} from tools/visqol (one time, several minutes)...", flush=True)
-        subprocess.run(["docker", "build", "-t", image, os.path.join(here, "tools", "visqol")], check=True)
+        subprocess.run(["docker", "build", "-t", image, os.path.join(os.path.dirname(here), "tools", "visqol")], check=True)
     with tempfile.TemporaryDirectory() as td:
         rows = []
         for i, (r, d) in enumerate(pairs):
