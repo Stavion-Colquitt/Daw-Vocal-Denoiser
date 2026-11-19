@@ -6,6 +6,8 @@
 
 🤗 [Model on Hugging Face](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser)
 
+**Later versions:** [v1c](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1c) (4x more of my own singing) · [v1b](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1b) (bigger GRU) · [v1d](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1d) (5 ms lookahead) · 🎧 [Live A/B demo](https://huggingface.co/spaces/Stavion-Colquitt/Realtime_Denoisers) · 📋 [Project board](https://github.com/users/Stavion-Colquitt/projects/2)
+
 > A causal, real-time vocal denoiser for **tracking vocals in a DAW**: 48 kHz, **10 ms algorithmic latency**,
 > 1.25M parameters, 0.19 ms of CPU per 5 ms block. Trained from scratch on my own vocal takes, VocalSet singing
 > and DNS Challenge speech, against the noise a home studio actually has: room tone, hiss, mains hum and
