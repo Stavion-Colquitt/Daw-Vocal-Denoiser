@@ -5,6 +5,8 @@
 > reviewed everything before publishing.
 
 🤗 [Model on Hugging Face](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c) ·
+
+**Later versions:** [v1b](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1b) (bigger GRU, best accuracy) · [v1d](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser-v1d) (5 ms lookahead, same quality at half the CPU) · 🎧 [Live A/B demo](https://huggingface.co/spaces/Stavion-Colquitt/Realtime_Denoisers) · 📋 [Project board](https://github.com/users/Stavion-Colquitt/projects/2)
 v1: [Daw-Vocal-Denoiser](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser)
 
 Version 1c of my [DAW Vocal Denoiser](https://github.com/Stavion-Colquitt/Daw-Vocal-Denoiser): the same causal,
