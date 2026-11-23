@@ -4,10 +4,10 @@
 > documentation. All creative and technical decisions (model design, training data, evaluation) are mine, and I
 > reviewed everything before publishing.
 
-🎧 [Live A/B demo](https://huggingface.co/spaces/Stavion-Colquitt/Realtime_Denoisers) · 🤗 Models: [v1](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser), [v1c](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c), [v1b](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1b), [v1d](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1d) · 🐳 [`stavion/daw-denoiser`](https://hub.docker.com/r/stavion/daw-denoiser/tags) · 📋 [Project board](https://github.com/users/Stavion-Colquitt/projects/2)
+🎧 [Live A/B demo](https://huggingface.co/spaces/Stavion-Colquitt/Realtime_Denoisers) · 🤗 Models: [v1](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser), [v1c](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c), [v1b](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1b), [v1d](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1d), [v1e](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1e) · 🐳 [`stavion/daw-denoiser`](https://hub.docker.com/r/stavion/daw-denoiser/tags) · 📋 [Project board](https://github.com/users/Stavion-Colquitt/projects/2)
 
 A causal, real-time vocal denoiser for **tracking vocals in a DAW**: 48 kHz, **10 ms algorithmic latency** (15 ms with
-lookahead), about 1.25M parameters, a fraction of a millisecond of CPU per 5 ms block. Trained from scratch on my own
+lookahead), 1.25M parameters (2.51M for the bigger versions), a fraction of a millisecond of CPU per 5 ms block. Trained from scratch on my own
 vocal takes, VocalSet singing and DNS Challenge speech, against the noise a home studio actually has: room tone, hiss,
 mains hum and headphone bleed.
 
@@ -20,10 +20,12 @@ doubles as an ablation study: more data, a bigger model, and lookahead, measured
 | v1c | Does more of my own singing help? | 10 ms | 1.25M | 0.24 ms | [`versions/v1c`](versions/v1c) |
 | v1b | Bigger model (GRU 384) vs. more data? | 10 ms | 2.51M | 0.47 ms | [`versions/v1b`](versions/v1b) |
 | v1d | What does 5 ms of lookahead buy? | 15 ms | 1.25M | 0.23 ms | [`versions/v1d`](versions/v1d) |
+| v1e | Do the bigger model and lookahead stack? | 15 ms | 2.51M | 0.32 ms | [`versions/v1e`](versions/v1e) |
 
-**Which one to use:** **v1d** for the best quality per CPU if 15 ms is fine for monitoring; **v1b** for the best
-accuracy at 10 ms; **v1c** for my own voice with the cleanest pass-through; **v1** for other people's voices on a tight
-CPU budget.
+**Which one to use:** **v1e** for the cleanest result overall (best perceptual scores, and it changes clean vocals
+the least) if you have the CPU and 15 ms is fine; **v1d** for the best quality per CPU at 15 ms; **v1b** for the best
+accuracy at 10 ms; **v1c** for my own voice at 10 ms on a small CPU budget; **v1** for other people's voices on a
+tight CPU budget.
 
 ---
 
@@ -37,9 +39,10 @@ through the streaming engine on exactly the same clips, so differences are paire
 |---|---|---|---|---|---|---|
 | Noisy input | 19.04 | 19.02 | 2.37 | 3.53 | 1.732 |  |
 | v1 | 22.95 | 23.70 | 3.05 | 3.97 | **0.419** | 45.6 |
-| v1c | 23.27 | 23.85 | 3.03 | 3.98 | 0.485 | **51.1** |
-| v1b | **23.46** | **24.07** | 3.10 | **3.99** | 0.448 | 47.6 |
-| v1d | 23.43 | 24.03 | **3.11** | **3.99** | 0.446 | 50.5 |
+| v1c | 23.27 | 23.85 | 3.03 | 3.98 | 0.485 | 51.1 |
+| v1b | **23.46** | 24.07 | 3.10 | 3.99 | 0.448 | 47.6 |
+| v1d | 23.43 | 24.03 | 3.11 | 3.99 | 0.446 | 50.5 |
+| v1e | 23.45 | **24.08** | **3.12** | **4.00** | 0.445 | **53.1** |
 
 **Each one-variable step, paired** (mean ± 95% CI over clips; bold = the interval excludes zero):
 
@@ -48,10 +51,14 @@ through the streaming engine on exactly the same clips, so differences are paire
 | v1 → v1c (more own data) | +0.32 ± 0.36 | **+0.95 ± 0.67** | -0.27 ± 0.27 | **-0.02 ± 0.02** |
 | v1c → v1b (GRU 256 → 384) | +0.19 ± 0.25 | -0.03 ± 0.45 | **+0.38 ± 0.24** | **+0.07 ± 0.02** |
 | v1c → v1d (+5 ms lookahead) | +0.17 ± 0.19 | +0.09 ± 0.24 | +0.23 ± 0.30 | **+0.07 ± 0.02** |
+| v1b → v1e (+5 ms lookahead) | -0.01 ± 0.21 | +0.10 ± 0.31 | -0.11 ± 0.27 | **+0.02 ± 0.02** |
+| v1d → v1e (GRU 256 → 384) | +0.01 ± 0.19 | -0.02 ± 0.20 | +0.04 ± 0.31 | +0.02 ± 0.02 |
 
 **What this shows:** more of my own singing (v1c) specialized the model to my voice. A bigger model (v1b) is the most
 accurate and wins back other singers. 5 ms of lookahead (v1d) buys about as much as doubling the model, at half the
-CPU. The confidence intervals cover variation across test clips, not between training runs; a seed-variance re-run of
+CPU. Both together (v1e) don't stack on SI-SDR (it ties v1b and v1d), but give the best perceptual scores and
+the cleanest pass-through of any version (53.1 dB): this design looks plateaued around 23.4-23.5 dB SI-SDR on this
+test. The confidence intervals cover variation across test clips, not between training runs; a seed-variance re-run of
 v1c is on the [project board](https://github.com/users/Stavion-Colquitt/projects/2). Raw per-clip scores: [`results/`](results).
 
 ---
@@ -62,8 +69,8 @@ v1c is on the [project board](https://github.com/users/Stavion-Colquitt/projects
 # pip install onnxruntime numpy      (download daw_denoiser.onnx for the version you want from Hugging Face)
 import os
 os.environ["DAW_ONNX"] = "path/to/daw_denoiser.onnx"
-os.environ["DAW_LOOKAHEAD"] = "1"     # v1d only (0 for the others)
-os.environ["DAW_HIDDEN"] = "256"      # 384 for v1b
+os.environ["DAW_LOOKAHEAD"] = "1"     # v1d and v1e (0 for the others)
+os.environ["DAW_HIDDEN"] = "256"      # 384 for v1b and v1e
 from denoiser.stream import StreamEngine, process_file    # or run from inside denoiser/
 
 eng = StreamEngine()
@@ -77,10 +84,11 @@ y = process_file(x)                   # offline: whole mono 48 kHz array, time-a
 | v1c | 256 | 0 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1c) |
 | v1b | 384 | 0 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1b](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1b) |
 | v1d | 256 | 1 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1d](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1d) |
+| v1e | 384 | 1 | [https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1e](https://huggingface.co/Stavion-Colquitt/DAW_Vocal_Denoiser_v1e) |
 
 ## Docker
 
-CPU-only images (ONNX Runtime, no PyTorch) on Docker Hub: `stavion/daw-denoiser:v1b`, `:v1d`, and `:latest` (v1c).
+CPU-only images (ONNX Runtime, no PyTorch) on Docker Hub: `stavion/daw-denoiser:v1b`, `:v1d`, `:v1e`, and `:latest` (v1c).
 Any sample rate, mono or stereo; output is 24-bit WAV at the input's rate.
 
 ```bash
@@ -105,7 +113,7 @@ directly (122.5 dB, limited by the 24-bit WAV output).
 | `denoiser/test_lookahead.py` | Confirms lookahead reaches exactly as far ahead as set, and no further |
 | `denoiser/denoise.py`, `docker/` | Container CLI and HTTP service |
 | `versions/<v>/` | Notes, results and the training script (`run.ps1`) for each version |
-| `results/` | Held-out comparison of all four versions, per-clip scores |
+| `results/` | Held-out comparison of all five versions, per-clip scores |
 | `tools/visqol/` | ViSQOL v3 built from source in Docker (used by `eval.py`) |
 
 Retrain a version: `versions/<v>/run.ps1`. It sets that version's settings and keeps its checkpoints, MLflow db and
@@ -176,7 +184,7 @@ No commercial sample packs. Code is MIT licensed (see `LICENSE`).
 - For monitoring and cleaning vocal takes (singing or speech) recorded in untreated rooms.
 - Removes noise, not reverb. Mono, 48 kHz only (resample other rates first).
 - Not tested on heavy distortion or SNR below 0 dB; very loud headphone bleed can survive.
-- v1d adds 5 ms of latency (15 ms total); still low enough to monitor through.
+- v1d and v1e add 5 ms of latency (15 ms total); still low enough to monitor through.
 
 ## History
 
