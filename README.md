@@ -33,7 +33,7 @@ tight CPU budget.
 
 180 noisy clips (+ 20 clean pass-through clips) that no version trained on: my held-out song *Say Dat Name* (86 clips)
 and held-out VocalSet singers (94 clips), mixed with dev-split noise at 0-40 dB SNR from a fixed seed. Every version runs
-through the streaming engine on exactly the same clips, so differences are paired. Bold = best.
+through the streaming engine on exactly the same clips, so differences are paired. Bold = best. See the [known issue](#known-issue-a-training-data-leak-and-how-big-it-was) about a training-data leak found after these were scored.
 
 | Version | SI-SDR (dB) | SDR (dB) | PESQ-WB | ViSQOL | FAD-MERT (lower better) | Clean pass-through SI-SDR (dB) |
 |---|---|---|---|---|---|---|
@@ -60,6 +60,25 @@ CPU. Both together (v1e) don't stack on SI-SDR (it ties v1b and v1d), but give t
 the cleanest pass-through of any version (53.1 dB): this design looks plateaued around 23.4-23.5 dB SI-SDR on this
 test. The confidence intervals cover variation across test clips, not between training runs; a seed-variance re-run of
 v1c is on the [project board](https://github.com/users/Stavion-Colquitt/projects/2). Raw per-clip scores: [`results/`](results).
+
+---
+
+## Known issue: a training-data leak, and how big it was
+
+After the results above were scored, an audit found that the DNS Challenge clean-speech pool I trained on contains a second, unsplit copy of VocalSet (3,613 files, all 20 singers). My own VocalSet pool was split by singer for evaluation, but that copy was split only by a hash of the file name, so about 334 of the 360 files from the two held-out singers (female9 and male11) were on the training side as clean-speech targets. In total about 26 percent of the speech training pool (3,424 of 13,026 files) was VocalSet. My own recordings were not affected. **This applies to all five versions above (v1, v1c, v1b, v1d, v1e), and the published weights were trained with it.**
+
+The fix is in `denoiser/dataset.py`, which now drops those files, and `denoiser/test_no_leakage.py` fails loudly if any VocalSet-derived file reaches the speech pool.
+
+**How big was the effect?** [`versions/v1_clean`](versions/v1_clean) is v1 retrained from scratch with the fix (same model, hyperparameters and 108,773 steps), scored once against v1 with `compare.py` on the held-out test clips. That call used `--n 180`, the main table used 200, so it covers 163 of the 180 noisy clips (86 of 94 VocalSet, 77 of 86 own voice); v1's per-clip scores on those clips are identical to the main comparison. Paired, v1_clean minus v1, mean ± 95% CI over clips:
+
+| Held-out group | Clips | SI-SDR (dB), v1 to v1_clean | Change | SDR change | PESQ-WB change |
+|---|---|---|---|---|---|
+| Held-out VocalSet singers | 86 | 23.75 to 23.59 | -0.15 ± 0.24 | -0.22 ± 0.20 | -0.01 ± 0.02 |
+| My own voice (control) | 77 | 21.59 to 21.47 | -0.12 ± 0.45 | -0.07 ± 0.38 | -0.00 ± 0.02 |
+
+If the leak had inflated v1's VocalSet scores, VocalSet should drop more than my own voice after the fix. It dropped 0.03 dB more in SI-SDR (± 0.51) and 0.15 dB more in SDR (± 0.43), and every interval includes zero. So there is no measurable effect on v1's held-out VocalSet scores at this sample size.
+
+What this does not show: it is one retrain, so there is no seed variance and the intervals cover variation across clips only; v1c, v1b, v1d and v1e were **not** retrained, so they remain formally affected; 17 of the 180 noisy clips were not scored in that run; and v1_clean passes clean vocals through at 44.5 dB SI-SDR against 47.6 dB for v1, a gap I have not explained. Raw scores: [`versions/v1_clean/compare_v1_clean.json`](versions/v1_clean/compare_v1_clean.json).
 
 ---
 
@@ -111,8 +130,9 @@ directly (122.5 dB, limited by the 24-bit WAV output).
 | `denoiser/export_onnx.py`, `check_parity.py` | One-frame ONNX export; streaming vs. PyTorch parity and CPU time |
 | `denoiser/eval.py`, `compare.py`, `compare_multi.py` | Held-out evaluation; several versions on identical clips |
 | `denoiser/test_lookahead.py` | Confirms lookahead reaches exactly as far ahead as set, and no further |
+| `denoiser/test_no_leakage.py` | Fails if any VocalSet-derived file reaches the DNS speech training pool (see Known issue) |
 | `denoiser/denoise.py`, `docker/` | Container CLI and HTTP service |
-| `versions/<v>/` | Notes, results and the training script (`run.ps1`) for each version |
+| `versions/<v>/` | Notes, results and the training script (`run.ps1`) for each version; `v1_clean` is the leak-fixed control run, not a release |
 | `results/` | Held-out comparison of all five versions, per-clip scores |
 | `tools/visqol/` | ViSQOL v3 built from source in Docker (used by `eval.py`) |
 
@@ -185,6 +205,7 @@ No commercial sample packs. Code is MIT licensed (see `LICENSE`).
 - Removes noise, not reverb. Mono, 48 kHz only (resample other rates first).
 - Not tested on heavy distortion or SNR below 0 dB; very loud headphone bleed can survive.
 - v1d and v1e add 5 ms of latency (15 ms total); still low enough to monitor through.
+- All five released versions were trained with a leaked copy of VocalSet in the speech pool; the measured effect on v1 is within noise (see Known issue), the others were not retrained.
 
 ## History
 

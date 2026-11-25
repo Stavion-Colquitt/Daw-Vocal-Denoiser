@@ -18,13 +18,56 @@ DNS = os.environ.get("DNS_DATA", os.path.join(os.path.dirname(os.path.dirname(os
 SNR_MIN, SNR_MAX, P_CLEAN_ONLY, P_ROOM = 0.0, 40.0, 0.10, 0.30
 CLEAN_W = {"own": 0.35, "vocalset": 0.35, "speech": 0.30}
 
+# --- Leakage guard (audit of 2026-11-25, see denoiser-report/LEAKAGE_AUDIT_2026-11-25.md) -----------------------
+# The DNS clean pool carries a second, unsplit copy of VocalSet (folder VocalSet_48kHz_mono, 3,613 files, names
+# "vocalset_<singer>_<take>_48kHz.wav", re-authored at 3x speed). All 20 singers are in it, including the held-out
+# female9 and male11. Singing already enters training through vocalset/train, which is split by singer, so every
+# VocalSet-derived file is filtered out of the DNS speech branch here. Nothing is moved or deleted: the files stay
+# on disk, they are simply never drawn as a clean target. This is a filter, not a data change.
+VOCALSET_SINGERS = tuple(f"female{i}" for i in range(1, 10)) + tuple(f"male{i}" for i in range(1, 12))
+VOCALSET_HOLDOUT = ("female9", "male11")       # the held-out test singers
+VOCALSET_DEV = ("female8", "male10")           # the VocalSet dev singers
+
+
+_VOCALSET_NAMES = None
+
+
+def _vocalset_names():
+    """Basenames of every file in the DNS copy of VocalSet (cached). Used as an independent overlap check."""
+    global _VOCALSET_NAMES
+    if _VOCALSET_NAMES is None:
+        pat = os.path.join(DNS, "clean_fullband", "**", "VocalSet*", "*.wav")
+        _VOCALSET_NAMES = {os.path.basename(f).lower() for f in glob.glob(pat, recursive=True)}
+    return _VOCALSET_NAMES
+
+
+def _is_vocalset_derived(path):
+    """True if a DNS clean file is a VocalSet copy: named vocalset_* or carrying any VocalSet singer token."""
+    n = os.path.basename(path).lower()
+    return "vocalset" in n or any(s in n for s in VOCALSET_SINGERS)
+
+
+def _speech_pool(split):
+    """DNS clean speech for this split, with every VocalSet-derived file removed (leakage audit 2026-11-25)."""
+    files = [f for f in glob.glob(os.path.join(DNS, "clean_fullband", "**", "*.wav"), recursive=True)
+             if _is_dev(f) == (split != "train")]
+    kept = [f for f in files if not _is_vocalset_derived(f)]
+    names = _vocalset_names()     # fail loud, independent overlap check: no kept speech file may share a basename
+    clash = [f for f in kept if os.path.basename(f).lower() in names]      # with the DNS copy of VocalSet
+    if clash:
+        raise RuntimeError(f"{len(clash)} speech file(s) for {split!r} are still VocalSet copies, e.g. "
+                           f"{clash[:3]}. Refusing to train on leaked data (see LEAKAGE_AUDIT_2026-11-25.md).")
+    if not kept:
+        raise RuntimeError(f"DNS speech pool for {split!r} is empty after the VocalSet filter (DNS_DATA={DNS}).")
+    return kept
+
 
 def _is_dev(path, pct=5): return zlib.crc32(os.path.basename(path).encode()) % 100 < pct
 
 def pools(split):
     g = lambda pat: sorted(glob.glob(pat, recursive=True))
     sp = "train" if split == "train" else "dev"
-    speech = [f for f in g(os.path.join(DNS, "clean_fullband", "**", "*.wav")) if _is_dev(f) == (split != "train")]
+    speech = _speech_pool(split)                    # DNS clean speech, VocalSet copies filtered out (2026-11-25 audit)
     noise = [f for f in g(os.path.join(DNS, "noise_fullband", "**", "*.wav")) if _is_dev(f) == (split != "train")]
     own = g(os.path.join(DATA, "own_vocals", sp, "*.wav"))
     if split == "train" and os.environ.get("DAW_OWN_EXTRA"):          # v1c: more of my own takes (train only)
